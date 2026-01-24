@@ -10,12 +10,14 @@ class HomeScreen extends StatefulWidget {
   final int heartCount;
   final int coinCount;
   final Function(int)? onHeartCountChanged;
+  final Map<String, dynamic>? userData;
   final Function(int)? onCoinCountChanged;
 
   const HomeScreen({
     Key? key,
     this.heartCount = 5,
     this.coinCount = 0,
+    this.userData,
     this.onHeartCountChanged,
     this.onCoinCountChanged,
   }) : super(key: key);

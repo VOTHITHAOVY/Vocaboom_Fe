@@ -10,9 +10,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
   http: ^0.13.0
-  flutter_tts: ^3.8.0  # THÊM DÒNG NÀY
+  flutter_tts: ^3.8.0
+  google_sign_in: ^6.1.6   # Thư viện Google
+  flutter_facebook_auth: ^6.0.4 # Thư viện Facebook
 
 dev_dependencies:
   flutter_test:

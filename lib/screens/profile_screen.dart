@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'settings_screen.dart';
 import 'notifications_screen.dart';
+import 'LoginScreen.dart';
 
 class ProfileScreen extends StatelessWidget {
   final int heartCount;
@@ -18,29 +19,38 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Giả định trạng thái đăng nhập - trong thực tế nên dùng state management
+    bool isLoggedIn = false; // Thay đổi thành true để test giao diện đã đăng nhập
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.grey[50],
       body: SafeArea(
         child: SingleChildScrollView(
           child: Column(
             children: [
+              // Header với gradient
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Colors.purple.shade400, Colors.purple.shade600],
+                    colors: [const Color(0xFF0277BD), const Color(0xFF01579B)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                 ),
                 child: Column(
                   children: [
+                    // Top bar
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
-                          'AI Tutor',
-                          style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                          'Hồ sơ của tôi',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         IconButton(
                           icon: const Icon(Icons.settings, color: Colors.white),
@@ -59,79 +69,94 @@ class ProfileScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 20),
+
+                    // Avatar
                     GestureDetector(
                       onTap: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Ảnh đại diện'),
-                            content: const Text('Thay đổi ảnh đại diện của bạn.'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('Hủy'),
-                              ),
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('Thay đổi'),
-                              ),
-                            ],
-                          ),
-                        );
+                        // Chức năng thay đổi avatar
                       },
-                      child: Container(
-                        width: 100,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 4),
-                        ),
-                        child: const Icon(Icons.person, size: 60, color: Colors.purple),
+                      child: Stack(
+                        children: [
+                          Container(
+                            width: 100,
+                            height: 100,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 4),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.2),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 5),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.person,
+                              size: 60,
+                              color: Color(0xFF0277BD),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: const Color(0xFF0277BD), width: 2),
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt,
+                                size: 16,
+                                color: Color(0xFF0277BD),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 16),
-                    GestureDetector(
-                      onTap: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Tên người dùng'),
-                            content: const Text('Thay đổi tên hiển thị của bạn.'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('Hủy'),
-                              ),
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('Lưu'),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                      child: const Text(
-                        'Guest User',
-                        style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+
+                    // Tên người dùng
+                    Text(
+                      isLoggedIn ? 'Nguyễn Văn A' : 'Khách',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 8),
+
+                    // Level badge
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: const Text(
-                        'Level 1 • Beginner',
-                        style: TextStyle(color: Colors.white),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.star, color: Colors.amber, size: 18),
+                          SizedBox(width: 6),
+                          Text(
+                            'Level 1 • Beginner',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
+
+              const SizedBox(height: 16),
+
+              // Thống kê
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
@@ -141,105 +166,90 @@ class ProfileScreen extends StatelessWidget {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _buildStatCard('Points', coinCount.toString(), Icons.stars, Colors.amber),
+                      child: _buildStatCard('Điểm', coinCount.toString(), Icons.stars, Colors.amber),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _buildStatCard('Lessons', '0', Icons.book, Colors.blue),
+                      child: _buildStatCard('Bài học', '0', Icons.book, Colors.blue),
                     ),
                   ],
                 ),
               ),
+
               const SizedBox(height: 24),
-              _buildMenuItem(Icons.chat_bubble_outline, 'AI Chat Assistant', 'Chat with AI tutor', Colors.purple, () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('AI Chat Assistant'),
-                    content: const Text('Trò chuyện với trợ lý AI để được giải đáp thắc mắc.'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('OK'),
+
+              // Thông tin cá nhân (chỉ hiện khi đã đăng nhập)
+              if (isLoggedIn) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Thông tin cá nhân',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
                       ),
-                    ],
-                  ),
-                );
-              }),
-              _buildMenuItem(Icons.mic, 'Speaking Practice', 'Improve pronunciation', Colors.pink, () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Luyện nói'),
-                    content: const Text('Tính năng luyện nói sẽ sớm có mặt.'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('OK'),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-              _buildMenuItem(Icons.auto_stories, 'My Progress', 'Track your learning', Colors.blue, () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Tiến độ học tập'),
-                    content: const Text('Xem thống kê và tiến độ học tập của bạn.'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('OK'),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-              _buildMenuItem(Icons.workspace_premium, 'Upgrade to Premium', 'Unlock all features', Colors.orange, () {
-                showModalBottomSheet(
-                  context: context,
-                  builder: (context) => Container(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text(
-                          'Nâng cấp Premium',
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 20),
-                        const ListTile(
-                          leading: Icon(Icons.diamond, color: Colors.orange),
-                          title: Text('Tất cả nội dung'),
-                          subtitle: Text('Truy cập không giới hạn'),
-                        ),
-                        const ListTile(
-                          leading: Icon(Icons.offline_bolt, color: Colors.orange),
-                          title: Text('Học offline'),
-                          subtitle: Text('Tải xuống mọi lúc'),
-                        ),
-                        const ListTile(
-                          leading: Icon(Icons.auto_awesome, color: Colors.orange),
-                          title: Text('Không quảng cáo'),
-                        ),
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: () {},
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange,
+                      const SizedBox(height: 12),
+
+                      // Card thông tin
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
                             ),
-                            child: const Text('Nâng cấp ngay'),
-                          ),
+                          ],
                         ),
-                      ],
-                    ),
+                        child: Column(
+                          children: [
+                            _buildInfoRow(Icons.person_outline, 'Họ và tên', 'Nguyễn Văn A'),
+                            const Divider(height: 1),
+                            _buildInfoRow(Icons.email_outlined, 'Email', 'nguyenvana@example.com'),
+                            const Divider(height: 1),
+                            _buildInfoRow(Icons.phone_outlined, 'Số điện thoại', '0123 456 789'),
+                            const Divider(height: 1),
+                            _buildInfoRow(Icons.cake_outlined, 'Ngày sinh', '01/01/2000'),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                );
-              }),
-              _buildMenuItem(Icons.notifications_outlined, 'Notifications', 'Manage alerts', Colors.teal, () {
+                ),
+                const SizedBox(height: 24),
+              ],
+
+              // Các menu item
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Tính năng',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
+              ),
+
+              _buildMenuItem(Icons.chat_bubble_outline, 'AI Chat Assistant', 'Trò chuyện với AI', const Color(0xFF0277BD), () {}),
+              _buildMenuItem(Icons.mic, 'Luyện phát âm', 'Cải thiện khả năng nói', Colors.pink, () {}),
+              _buildMenuItem(Icons.auto_stories, 'Tiến trình học tập', 'Theo dõi quá trình học', Colors.blue, () {}),
+              _buildMenuItem(Icons.workspace_premium, 'Nâng cấp Premium', 'Mở khóa tất cả tính năng', Colors.orange, () {}),
+              _buildMenuItem(Icons.notifications_outlined, 'Thông báo', 'Quản lý thông báo', Colors.teal, () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -247,76 +257,100 @@ class ProfileScreen extends StatelessWidget {
                   ),
                 );
               }),
-              _buildMenuItem(Icons.help_outline, 'Help & Support', 'Get assistance', Colors.green, () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Trợ giúp & Hỗ trợ'),
-                    content: const Text('Liên hệ với chúng tôi nếu bạn cần hỗ trợ.'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('OK'),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-              _buildMenuItem(Icons.info_outline, 'About', 'App information', Colors.indigo, () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Về ứng dụng'),
-                    content: const Text('Vocaboom - Ứng dụng học tiếng Anh\nPhiên bản 1.0.0'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('OK'),
-                      ),
-                    ],
-                  ),
-                );
-              }),
+              _buildMenuItem(Icons.help_outline, 'Hỗ trợ', 'Nhận trợ giúp', Colors.green, () {}),
+              _buildMenuItem(Icons.info_outline, 'Giới thiệu', 'Thông tin ứng dụng', Colors.indigo, () {}),
+
               const SizedBox(height: 20),
+
+              // Nút đăng nhập/đăng xuất
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 16),
                 width: double.infinity,
                 height: 50,
-                child: OutlinedButton(
+                child: isLoggedIn
+                    ? OutlinedButton.icon(
                   onPressed: () {
+                    // Xử lý logout
                     showDialog(
                       context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Đăng xuất'),
-                        content: const Text('Bạn có chắc chắn muốn đăng xuất?'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('Hủy'),
+                      builder: (BuildContext context) {
+                        return AlertDialog(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                          TextButton(
-                            onPressed: () {
-                              Navigator.pop(context);
-                              Navigator.pop(context);
-                            },
-                            child: const Text('Đăng xuất'),
-                          ),
-                        ],
-                      ),
+                          title: const Text('Đăng xuất'),
+                          content: const Text('Bạn có chắc chắn muốn đăng xuất?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Hủy'),
+                            ),
+                            ElevatedButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                // Thực hiện logout
+                                // Sau đó chuyển về LoginScreen
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const LoginScreen(),
+                                  ),
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                              ),
+                              child: const Text('Đăng xuất'),
+                            ),
+                          ],
+                        );
+                      },
                     );
                   },
+                  icon: const Icon(Icons.logout, color: Colors.red),
+                  label: const Text(
+                    'Đăng xuất',
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.red),
+                    side: const BorderSide(color: Colors.red, width: 2),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(25),
                     ),
                   ),
-                  child: const Text(
-                    'Logout',
-                    style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold),
+                )
+                    : ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const LoginScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.login, color: Colors.white),
+                  label: const Text(
+                    'Đăng nhập / Đăng ký',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0277BD),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(25),
+                    ),
+                    elevation: 3,
                   ),
                 ),
               ),
+
               const SizedBox(height: 40),
             ],
           ),
@@ -326,73 +360,41 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildStatCard(String title, String value, IconData icon, Color color) {
-    return Builder(
-      builder: (BuildContext cardContext) {
-        return GestureDetector(
-          onTap: () {
-            showDialog(
-              context: cardContext,
-              builder: (BuildContext dialogContext) => AlertDialog(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                title: Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
-                ),
-                content: Text(
-                  'Giá trị hiện tại: $value',
-                  style: const TextStyle(fontSize: 16),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(dialogContext),
-                    child: const Text(
-                      'Đóng',
-                      style: TextStyle(
-                        color: Colors.purple,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              children: [
-                Icon(icon, color: color, size: 32),
-                const SizedBox(height: 8),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 32),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: color,
             ),
           ),
-        );
-      },
+          const SizedBox(height: 4),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -402,7 +404,13 @@ class ProfileScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[300]!),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: ListTile(
         leading: Container(
@@ -423,6 +431,54 @@ class ProfileScreen extends StatelessWidget {
         ),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
         onTap: onTap,
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0277BD).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: const Color(0xFF0277BD), size: 20),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit, size: 20, color: Colors.grey),
+            onPressed: () {
+              // Chức năng chỉnh sửa thông tin
+            },
+          ),
+        ],
       ),
     );
   }
