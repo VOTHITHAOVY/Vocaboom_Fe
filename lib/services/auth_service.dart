@@ -7,7 +7,7 @@ class AuthService {
   // - Nếu chạy trên máy thật: Dùng địa chỉ IP LAN (VD: 'http://192.168.1.5:8080/api/v1/auth')
   // - Nếu dùng Cloudflare/Domain thực tế: Dùng 'https://api.buivietquangvinh.xyz/api/v1/auth'
   //static const String baseUrl = "https://api.buivietquangvinh.xyz/api/v1/auth";
-  static const String baseUrl = "http://192.168.1.14:8080/api/v1/auth";
+  static const String baseUrl = "http://192.168.1.15:8080/api/v1/auth";
   // Header giả lập trình duyệt để tránh bị Cloudflare chặn
   static final Map<String, String> headers = {
     "Content-Type": "application/json",
@@ -49,7 +49,7 @@ class AuthService {
   }
 
   // 2. Hàm Đăng ký
-  Future<Map<String, dynamic>> register(String name, String email, String password) async {
+  Future<Map<String, dynamic>> register(String name, String email,String phone, String password) async {
     final url = Uri.parse('$baseUrl/register');
 
     try {
@@ -60,6 +60,7 @@ class AuthService {
           'fullName': name, // Khớp với Backend Java: private String fullName;
           'email': email,
           'password': password,
+          'phoneNumber': phone,
           'role': 'USER'
         }),
       );

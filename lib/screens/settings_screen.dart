@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/vocabulary_api_service.dart';
+import 'LoginScreen.dart'; // Đảm bảo chỉ import, không được viết class LoginScreen ở dưới
 
 class SettingsScreen extends StatefulWidget {
   final Function(int)? onHeartCountChanged;
   final Function(int)? onCoinCountChanged;
+  final VoidCallback? onThemeChanged;
 
   const SettingsScreen({
     Key? key,
     this.onHeartCountChanged,
     this.onCoinCountChanged,
+    this.onThemeChanged,
   }) : super(key: key);
 
   @override
@@ -18,124 +23,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = true;
   bool _soundEnabled = true;
   bool _darkMode = false;
+  String _selectedLanguage = 'vi';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _notificationsEnabled = prefs.getBool('notifications') ?? true;
+      _soundEnabled = prefs.getBool('sound') ?? true;
+      _darkMode = prefs.getBool('darkMode') ?? false;
+      _selectedLanguage = prefs.getString('language') ?? 'vi';
+    });
+  }
+
+  Future<void> _saveSetting(String key, dynamic value) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (value is bool) {
+      await prefs.setBool(key, value);
+    } else if (value is String) {
+      await prefs.setString(key, value);
+    }
+  }
+
+  void _handleClearCache() {
+    VocabularyApiService().clearCache();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Đã xóa bộ nhớ đệm!'), backgroundColor: Colors.green),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Cài đặt'),
-      ),
+      backgroundColor: _darkMode ? const Color(0xFF1E1E1E) : Colors.grey[50],
+      appBar: AppBar(title: const Text('Cài đặt')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
         children: [
-          ListTile(
-            leading: const Icon(Icons.notifications),
+          SwitchListTile(
             title: const Text('Thông báo'),
-            trailing: Switch(
-              value: _notificationsEnabled,
-              onChanged: (value) {
-                setState(() {
-                  _notificationsEnabled = value;
-                });
-              },
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.volume_up),
-            title: const Text('Âm thanh'),
-            trailing: Switch(
-              value: _soundEnabled,
-              onChanged: (value) {
-                setState(() {
-                  _soundEnabled = value;
-                });
-              },
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.dark_mode),
-            title: const Text('Chế độ tối'),
-            trailing: Switch(
-              value: _darkMode,
-              onChanged: (value) {
-                setState(() {
-                  _darkMode = value;
-                });
-              },
-            ),
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.language),
-            title: const Text('Ngôn ngữ'),
-            trailing: const Text('Tiếng Việt'),
-            onTap: () {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Ngôn ngữ'),
-                  content: const Text('Chọn ngôn ngữ cho ứng dụng.'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Đóng'),
-                    ),
-                  ],
-                ),
-              );
+            value: _notificationsEnabled,
+            onChanged: (val) {
+              setState(() => _notificationsEnabled = val);
+              _saveSetting('notifications', val);
             },
           ),
           ListTile(
-            leading: const Icon(Icons.storage),
-            title: const Text('Dung lượng'),
-            subtitle: const Text('Xóa bộ nhớ cache'),
+            title: const Text('Đăng xuất', style: TextStyle(color: Colors.red)),
             onTap: () {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Xóa cache'),
-                  content: const Text('Xóa dữ liệu tạm thời để giải phóng bộ nhớ.'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Hủy'),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      child: const Text('Xóa'),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.restore),
-            title: const Text('Đặt lại tiến độ'),
-            onTap: () {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Đặt lại tiến độ'),
-                  content: const Text('Bạn có chắc chắn muốn đặt lại tất cả tiến độ học tập?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Hủy'),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        widget.onHeartCountChanged?.call(5);
-                        widget.onCoinCountChanged?.call(0);
-                        Navigator.pop(context);
-                      },
-                      child: const Text('Đặt lại'),
-                    ),
-                  ],
-                ),
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (context) => const LoginScreen()),
+                    (route) => false,
               );
             },
           ),

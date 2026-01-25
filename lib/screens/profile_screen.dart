@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'settings_screen.dart';
-import 'notifications_screen.dart';
+import 'settings_screen.dart';
 import 'LoginScreen.dart';
-
+import 'notifications_screen.dart';// <-- Nghi ngờ thiếu dòng này nhất
+import 'settings_screen.dart';
 class ProfileScreen extends StatelessWidget {
   final int heartCount;
   final int coinCount;
   final Function(int)? onHeartCountChanged;
   final Function(int)? onCoinCountChanged;
+
+  // Thêm biến nhận dữ liệu user từ MainScreen
+  final Map<String, dynamic>? userData;
 
   const ProfileScreen({
     Key? key,
@@ -15,12 +19,21 @@ class ProfileScreen extends StatelessWidget {
     required this.coinCount,
     this.onHeartCountChanged,
     this.onCoinCountChanged,
+    this.userData, // Nhận dữ liệu ở đây
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    // Giả định trạng thái đăng nhập - trong thực tế nên dùng state management
-    bool isLoggedIn = false; // Thay đổi thành true để test giao diện đã đăng nhập
+    // Xác định trạng thái đăng nhập dựa trên dữ liệu truyền vào
+    final bool isLoggedIn = userData != null;
+
+    // Lấy thông tin (Sử dụng toán tử ?? để lấy giá trị mặc định nếu null)
+    // Lưu ý: Key ('name', 'email', 'avatar') phải khớp với JSON API trả về
+    final String userName = userData?['name'] ?? userData?['fullName'] ?? 'Khách';
+    final String userEmail = userData?['email'] ?? 'Chưa cập nhật';
+    final String? avatarUrl = userData?['picture'] ?? userData?['avatarUrl'];
+    final String phone = userData?['phone'] ?? 'Chưa cập nhật';
+    final String dob = userData?['dob'] ?? userData?['birthday'] ?? 'Chưa cập nhật';
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -31,9 +44,9 @@ class ProfileScreen extends StatelessWidget {
               // Header với gradient
               Container(
                 padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [const Color(0xFF0277BD), const Color(0xFF01579B)],
+                    colors: [Color(0xFF0277BD), Color(0xFF01579B)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -91,8 +104,17 @@ class ProfileScreen extends StatelessWidget {
                                   offset: const Offset(0, 5),
                                 ),
                               ],
+                              // Hiển thị ảnh từ API nếu có, ngược lại hiện icon
+                              image: (isLoggedIn && avatarUrl != null && avatarUrl.isNotEmpty)
+                                  ? DecorationImage(
+                                image: NetworkImage(avatarUrl),
+                                fit: BoxFit.cover,
+                              )
+                                  : null,
                             ),
-                            child: const Icon(
+                            child: (isLoggedIn && avatarUrl != null && avatarUrl.isNotEmpty)
+                                ? null // Đã có ảnh nền
+                                : const Icon(
                               Icons.person,
                               size: 60,
                               color: Color(0xFF0277BD),
@@ -120,9 +142,9 @@ class ProfileScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
 
-                    // Tên người dùng
+                    // Tên người dùng hiển thị động
                     Text(
-                      isLoggedIn ? 'Nguyễn Văn A' : 'Khách',
+                      userName,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 24,
@@ -131,32 +153,33 @@ class ProfileScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
 
-                    // Level badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(20),
+                    // Level badge (Có thể lấy từ API nếu có field 'level')
+                    if (isLoggedIn)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.star, color: Colors.amber, size: 18),
+                            SizedBox(width: 6),
+                            Text(
+                              'Level 1 • Beginner',
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.star, color: Colors.amber, size: 18),
-                          SizedBox(width: 6),
-                          Text(
-                            'Level 1 • Beginner',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
               ),
 
               const SizedBox(height: 16),
 
-              // Thống kê
+              // Thống kê (Có thể map dữ liệu từ API vào đây nếu có)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
@@ -210,13 +233,14 @@ class ProfileScreen extends StatelessWidget {
                         ),
                         child: Column(
                           children: [
-                            _buildInfoRow(Icons.person_outline, 'Họ và tên', 'Nguyễn Văn A'),
+                            _buildInfoRow(Icons.person_outline, 'Họ và tên', userName),
                             const Divider(height: 1),
-                            _buildInfoRow(Icons.email_outlined, 'Email', 'nguyenvana@example.com'),
+                            _buildInfoRow(Icons.email_outlined, 'Email', userEmail),
                             const Divider(height: 1),
-                            _buildInfoRow(Icons.phone_outlined, 'Số điện thoại', '0123 456 789'),
+                            // Nếu API không trả về phone/dob thì hiển thị placeholder hoặc ẩn đi
+                            _buildInfoRow(Icons.phone_outlined, 'Số điện thoại', phone),
                             const Divider(height: 1),
-                            _buildInfoRow(Icons.cake_outlined, 'Ngày sinh', '01/01/2000'),
+                            _buildInfoRow(Icons.cake_outlined, 'Ngày sinh', dob),
                           ],
                         ),
                       ),
@@ -248,7 +272,6 @@ class ProfileScreen extends StatelessWidget {
               _buildMenuItem(Icons.chat_bubble_outline, 'AI Chat Assistant', 'Trò chuyện với AI', const Color(0xFF0277BD), () {}),
               _buildMenuItem(Icons.mic, 'Luyện phát âm', 'Cải thiện khả năng nói', Colors.pink, () {}),
               _buildMenuItem(Icons.auto_stories, 'Tiến trình học tập', 'Theo dõi quá trình học', Colors.blue, () {}),
-              _buildMenuItem(Icons.workspace_premium, 'Nâng cấp Premium', 'Mở khóa tất cả tính năng', Colors.orange, () {}),
               _buildMenuItem(Icons.notifications_outlined, 'Thông báo', 'Quản lý thông báo', Colors.teal, () {
                 Navigator.push(
                   context,
@@ -257,8 +280,6 @@ class ProfileScreen extends StatelessWidget {
                   ),
                 );
               }),
-              _buildMenuItem(Icons.help_outline, 'Hỗ trợ', 'Nhận trợ giúp', Colors.green, () {}),
-              _buildMenuItem(Icons.info_outline, 'Giới thiệu', 'Thông tin ứng dụng', Colors.indigo, () {}),
 
               const SizedBox(height: 20),
 
@@ -270,7 +291,6 @@ class ProfileScreen extends StatelessWidget {
                 child: isLoggedIn
                     ? OutlinedButton.icon(
                   onPressed: () {
-                    // Xử lý logout
                     showDialog(
                       context: context,
                       builder: (BuildContext context) {
@@ -287,14 +307,14 @@ class ProfileScreen extends StatelessWidget {
                             ),
                             ElevatedButton(
                               onPressed: () {
-                                Navigator.pop(context);
-                                // Thực hiện logout
-                                // Sau đó chuyển về LoginScreen
-                                Navigator.pushReplacement(
+                                Navigator.pop(context); // Đóng dialog
+                                // Chuyển về màn hình đăng nhập và xóa lịch sử route
+                                Navigator.pushAndRemoveUntil(
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) => const LoginScreen(),
                                   ),
+                                      (route) => false,
                                 );
                               },
                               style: ElevatedButton.styleFrom(
@@ -325,6 +345,7 @@ class ProfileScreen extends StatelessWidget {
                 )
                     : ElevatedButton.icon(
                   onPressed: () {
+                    // Chuyển đến màn hình login
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -358,6 +379,8 @@ class ProfileScreen extends StatelessWidget {
       ),
     );
   }
+
+  // --- Các Widget con giữ nguyên ---
 
   Widget _buildStatCard(String title, String value, IconData icon, Color color) {
     return Container(
@@ -472,6 +495,7 @@ class ProfileScreen extends StatelessWidget {
               ],
             ),
           ),
+          // Chỉ cho phép sửa nếu có dữ liệu thực tế (Optional)
           IconButton(
             icon: const Icon(Icons.edit, size: 20, color: Colors.grey),
             onPressed: () {

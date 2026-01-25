@@ -57,6 +57,7 @@ class _MainScreenState extends State<MainScreen> {
         heartCount: _heartCount,
         coinCount: _coinCount,
         onHeartCountChanged: _updateHeartCount,
+        userData: widget.userData,
         onCoinCountChanged: _updateCoinCount,
       ),
     ];

@@ -1,71 +1,88 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:translator/translator.dart'; // ✅ Dùng thư viện chuẩn này
 import '../models/vocabulary_word.dart';
 
 class VocabularyApiService {
   static const String _dictionaryUrl = 'https://api.dictionaryapi.dev/api/v2/entries/en';
-  static const String _translateUrl = 'https://api.mymemory.translated.net/get';
 
-  // 1. TỐI ƯU: Bộ nhớ đệm (Cache) lưu tạm các từ đã tìm để không gọi API lại
+  // Khởi tạo đối tượng dịch từ thư viện translator
+  final _translator = GoogleTranslator();
+
+  // Cache lưu trữ kết quả để tìm kiếm lần 2 siêu nhanh (0ms)
   static final Map<String, List<VocabularyWord>> _cache = {};
 
+  /// Hàm tìm kiếm chính
   Future<List<VocabularyWord>> searchWords(String query) async {
-    // Chuẩn hóa từ khóa (viết thường, xóa khoảng trắng thừa)
     final cleanQuery = query.trim().toLowerCase();
+    if (cleanQuery.isEmpty) return [];
 
-    // Kiểm tra Cache trước
+    // 1. TỐI ƯU: Kiểm tra Cache trước
     if (_cache.containsKey(cleanQuery)) {
-      print('🚀 Lấy từ Cache: "$cleanQuery" (Không tốn mạng)');
+      print('🚀 Lấy từ Cache (Không tốn mạng): "$cleanQuery"');
       return _cache[cleanQuery]!;
     }
 
     try {
       print('🔍 Đang tìm từ online: "$cleanQuery"');
 
+      // 2. Gọi API Từ điển Anh-Anh
       final response = await http.get(
         Uri.parse('$_dictionaryUrl/$cleanQuery'),
       ).timeout(const Duration(seconds: 10));
 
-      print('📡 API Status: ${response.statusCode}');
-
       if (response.statusCode == 200) {
         final jsonData = json.decode(response.body);
 
-        // Gọi hàm parse đã được tối ưu song song
+        // 3. Xử lý dữ liệu và Dịch song song (Anh -> Việt)
         final results = await _parseWithVietnameseTranslation(jsonData, cleanQuery);
 
-        // Lưu vào Cache
+        // Lưu vào Cache cho lần sau
         if (results.isNotEmpty) {
           _cache[cleanQuery] = results;
         }
-
         return results;
+
       } else if (response.statusCode == 404) {
-        throw Exception('Không tìm thấy từ "$query" trong từ điển');
+        // Fallback: Nếu từ điển Anh-Anh không có, dịch thẳng từ khóa đó
+        final fallbackTranslation = await _safeTranslate(cleanQuery);
+
+        if (fallbackTranslation.toLowerCase() != cleanQuery) {
+          return [VocabularyWord(
+            id: DateTime.now().toString(),
+            word: query,
+            pronunciation: '',
+            meaning: fallbackTranslation, // Nghĩa tiếng Việt
+            example: 'Không có ví dụ',
+            exampleTranslation: '',
+            category: 'General',
+            level: 'Beginner',
+            isBookmarked: false,
+            isLearned: false,
+            translatedMeaning: fallbackTranslation,
+          )];
+        }
+        return [];
       } else {
-        throw Exception('Lỗi API: ${response.statusCode}');
+        throw Exception('Lỗi API Dictionary: ${response.statusCode}');
       }
     } catch (e) {
       print('❌ Lỗi tìm kiếm: $e');
-      throw Exception('Không thể tìm từ: $e');
+      return [];
     }
   }
 
-  // 2. TỐI ƯU: Chuyển từ xử lý TUẦN TỰ sang SONG SONG (Parallel)
+  /// Hàm xử lý JSON và dịch Anh-Việt song song
   Future<List<VocabularyWord>> _parseWithVietnameseTranslation(dynamic json, String query) async {
     final List<VocabularyWord> words = [];
-
-    // Danh sách các tác vụ (Tasks) cần chạy song song
     final List<Future<void>> processingTasks = [];
 
-    // Biến đếm để giới hạn số lượng request dịch (tránh bị ban IP)
+    // TỐI ƯU: Chỉ dịch 3 định nghĩa đầu tiên để app chạy nhanh
     int translationCount = 0;
-    const int maxTranslations = 5;
+    const int maxTranslations = 3;
 
-    if (json is! List || json.isEmpty) {
-      return words;
-    }
+    if (json is! List || json.isEmpty) return words;
 
     for (var entry in json) {
       try {
@@ -73,14 +90,15 @@ class VocabularyApiService {
         final phonetics = entry['phonetics'] as List?;
         final meanings = entry['meanings'] as List?;
 
-        // Xử lý phát âm (giữ nguyên logic cũ)
+        // Lấy phát âm và audio
         String pronunciation = '';
         String audioUrl = '';
-        if (phonetics != null && phonetics.isNotEmpty) {
-          for (var phonetic in phonetics) {
-            if (phonetic['text'] != null && pronunciation.isEmpty) pronunciation = phonetic['text'].toString();
-            if (phonetic['audio'] != null && audioUrl.isEmpty) audioUrl = phonetic['audio'].toString();
-            if (pronunciation.isNotEmpty && audioUrl.isNotEmpty) break;
+        if (phonetics != null) {
+          for (var item in phonetics) {
+            if (item['text'] != null && pronunciation.isEmpty) pronunciation = item['text'];
+            if (item['audio'] != null && item['audio'].toString().isNotEmpty) {
+              audioUrl = item['audio'];
+            }
           }
         }
 
@@ -97,34 +115,32 @@ class VocabularyApiService {
                 final englishExample = definition['example']?.toString() ?? '';
 
                 if (englishMeaning.isNotEmpty) {
-                  // Thay vì await ngay lập tức, ta thêm task vào danh sách để chạy sau
                   bool shouldTranslate = translationCount < maxTranslations;
                   if (shouldTranslate) translationCount++;
 
+                  // TỐI ƯU: Đẩy việc dịch vào luồng xử lý song song (không chặn UI)
                   processingTasks.add(() async {
-                    String vietnameseMeaning = 'Đang tải...';
+                    String vietnameseMeaning = englishMeaning;
                     String vietnameseExample = '';
 
-                    // Chỉ gọi dịch nếu chưa vượt quá giới hạn (Tối ưu tốc độ)
                     if (shouldTranslate) {
-                      // Chạy 2 request dịch song song cùng lúc cho nghĩa và ví dụ
-                      final results = await Future.wait([
-                        _translateToVietnamese(englishMeaning),
-                        englishExample.isNotEmpty ? _translateToVietnamese(englishExample) : Future.value('')
-                      ]);
-                      vietnameseMeaning = results[0];
-                      vietnameseExample = results[1];
-                    } else {
-                      vietnameseMeaning = englishMeaning; // Fallback nếu quá nhiều từ
+                      // Dịch nghĩa Anh -> Việt
+                      vietnameseMeaning = await _safeTranslate(englishMeaning);
+
+                      // Dịch ví dụ Anh -> Việt (nếu có)
+                      if (englishExample.isNotEmpty) {
+                        vietnameseExample = await _safeTranslate(englishExample);
+                      }
                     }
 
                     final vocabWord = VocabularyWord(
-                      id: '${word}_${partOfSpeech}_${words.length}_${DateTime.now().microsecondsSinceEpoch}', // Dùng micro để tránh trùng ID khi chạy nhanh
+                      id: '${word}_${words.length}_${DateTime.now().microsecondsSinceEpoch}',
                       word: word,
                       pronunciation: pronunciation,
-                      meaning: englishMeaning,
-                      example: englishExample,
-                      exampleTranslation: vietnameseExample,
+                      meaning: englishMeaning,          // Nghĩa gốc (Anh)
+                      translatedMeaning: vietnameseMeaning, // Nghĩa dịch (Việt)
+                      example: englishExample,          // Ví dụ gốc (Anh)
+                      exampleTranslation: vietnameseExample, // Ví dụ dịch (Việt)
                       category: partOfSpeech,
                       level: _determineLevel(englishMeaning),
                       isBookmarked: false,
@@ -132,10 +148,8 @@ class VocabularyApiService {
                       audioUrl: audioUrl,
                       synonyms: synonyms,
                       antonyms: antonyms,
-                      translatedMeaning: vietnameseMeaning,
                     );
 
-                    // Thêm vào list kết quả (List.add trong Dart event loop là an toàn)
                     words.add(vocabWord);
                   }());
                 }
@@ -149,7 +163,7 @@ class VocabularyApiService {
       }
     }
 
-    // 3. TỐI ƯU: Chờ tất cả các task chạy xong cùng lúc
+    // Đợi tất cả các luồng dịch hoàn tất trước khi trả kết quả
     if (processingTasks.isNotEmpty) {
       await Future.wait(processingTasks);
     }
@@ -157,28 +171,17 @@ class VocabularyApiService {
     return words;
   }
 
-  Future<String> _translateToVietnamese(String text) async {
+  /// Hàm dịch an toàn sử dụng thư viện translator
+  Future<String> _safeTranslate(String text) async {
     if (text.isEmpty) return '';
     try {
-      final textToTranslate = text.length > 500 ? text.substring(0, 500) : text;
-
-      // Giảm timeout xuống 3s để không làm treo app nếu mạng lag
-      final response = await http.get(
-        Uri.parse('$_translateUrl?q=${Uri.encodeComponent(textToTranslate)}&langpair=en|vi'),
-      ).timeout(const Duration(seconds: 3));
-
-      if (response.statusCode == 200) {
-        final jsonData = json.decode(response.body);
-        final translated = jsonData['responseData']?['translatedText']?.toString() ?? text;
-        if (translated.contains('[ERROR]') || translated.contains('PLEASE SELECT')) {
-          return text; // Trả về text gốc nếu lỗi
-        }
-        return translated;
-      }
+      // Dịch từ tiếng Anh (en) sang tiếng Việt (vi)
+      var translation = await _translator.translate(text, from: 'en', to: 'vi');
+      return translation.text;
     } catch (e) {
-      // Slient fail: nếu lỗi dịch thì trả về tiếng Anh luôn cho nhanh
+      print('❌ Lỗi dịch thuật: $e');
+      return text; // Nếu lỗi mạng thì trả về text gốc
     }
-    return text;
   }
 
   String _determineLevel(String meaning) {
@@ -189,7 +192,6 @@ class VocabularyApiService {
     return 'Advanced';
   }
 
-  // Hàm xóa cache nếu cần (ví dụ khi user refresh)
   void clearCache() {
     _cache.clear();
   }

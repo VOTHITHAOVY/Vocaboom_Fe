@@ -1,4 +1,4 @@
-package com.example.vocaboom_app;
+package com.vocaboom.vocaboom;
 
 import io.flutter.embedding.android.FlutterActivity;
 

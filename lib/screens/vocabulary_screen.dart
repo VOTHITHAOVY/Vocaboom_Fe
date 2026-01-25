@@ -20,44 +20,53 @@ class VocabularyScreen extends StatefulWidget {
 }
 
 class _VocabularyScreenState extends State<VocabularyScreen> {
+  // Khởi tạo Service
   final VocabularyApiService _apiService = VocabularyApiService();
+
+  // Dữ liệu mẫu (Local - Giả lập Database)
   final List<VocabularyWord> _localWords = [
     VocabularyWord(
       id: '1',
       word: 'stick to',
       pronunciation: '/stɪk tuː/',
-      meaning: 'giữ nguyên, kiên trì',
+      meaning: 'to continue doing something despite difficulties',
+      translatedMeaning: 'giữ nguyên, kiên trì',
       example: 'I\'m sticking to my decision.',
       exampleTranslation: 'Tôi vẫn giữ nguyên quyết định của mình.',
       category: 'Phrasal Verb',
       level: 'Intermediate',
       isBookmarked: false,
       isLearned: false,
-      translatedMeaning: 'giữ nguyên, kiên trì',
     ),
     VocabularyWord(
       id: '2',
       word: 'perseverance',
       pronunciation: '/ˌpɜːrsəˈvɪrəns/',
-      meaning: 'sự kiên trì',
+      meaning: 'continued effort to do or achieve something',
+      translatedMeaning: 'sự kiên trì',
       example: 'Success requires perseverance.',
       exampleTranslation: 'Thành công đòi hỏi sự kiên trì.',
       category: 'Noun',
       level: 'Advanced',
       isBookmarked: true,
       isLearned: true,
-      translatedMeaning: 'sự kiên trì',
     ),
   ];
 
   List<VocabularyWord> _filteredWords = [];
   final List<VocabularyWord> _apiWords = [];
   final TextEditingController _searchController = TextEditingController();
+
+  // Debounce Timer để chống spam API
   Timer? _debounceTimer;
+
   bool _isSearching = false;
   bool _showApiResults = false;
   String _searchQuery = '';
-  int _selectedFilter = 0;
+  int _selectedFilter = 0; // 0: All, 1: Bookmarked, 2: Learned, 3: Not Learned
+
+  // Cờ ưu tiên hiển thị tiếng Việt
+  bool _preferVietnamese = true;
 
   @override
   void initState() {
@@ -68,17 +77,19 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
 
   @override
   void dispose() {
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _debounceTimer?.cancel();
     super.dispose();
   }
 
+  // --- LOGIC TÌM KIẾM ---
   void _onSearchChanged() {
-    if (_debounceTimer != null) {
-      _debounceTimer!.cancel();
-    }
+    // Hủy timer cũ nếu người dùng đang gõ tiếp
+    if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
 
-    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+    // Đợi 600ms mới bắt đầu tìm (khớp với logic bên Service)
+    _debounceTimer = Timer(const Duration(milliseconds: 600), () {
       final query = _searchController.text.trim().toLowerCase();
 
       setState(() {
@@ -86,11 +97,11 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
       });
 
       if (query.isEmpty) {
+        // Nếu ô tìm kiếm rỗng -> Hiện từ vựng Local
         _showLocalWords();
-      } else if (query.length >= 2) {
-        _searchFromApi(query);
       } else {
-        _searchLocal(query);
+        // Có chữ -> Gọi API tìm kiếm
+        _searchFromApi(query);
       }
     });
   }
@@ -98,75 +109,61 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
   void _showLocalWords() {
     setState(() {
       _showApiResults = false;
-      _filterWords();
-    });
-  }
-
-  void _searchLocal(String query) {
-    final filtered = _localWords.where((word) {
-      return word.word.toLowerCase().contains(query) ||
-          word.meaning.toLowerCase().contains(query) ||
-          word.example.toLowerCase().contains(query);
-    }).toList();
-
-    setState(() {
-      _showApiResults = false;
-      _filteredWords = filtered;
+      _apiWords.clear();
+      _filterWords(); // Áp dụng bộ lọc cho local list
     });
   }
 
   Future<void> _searchFromApi(String query) async {
     setState(() {
       _isSearching = true;
-      _apiWords.clear();
+      _showApiResults = true; // Chuyển sang chế độ hiển thị kết quả online
     });
 
     try {
+      // Gọi Service (đã tối ưu hóa với Cache và Google Translator)
       final results = await _apiService.searchWords(query);
 
-      setState(() {
-        _apiWords.addAll(results);
-        _showApiResults = true;
-        _filteredWords = _apiWords;
-        _isSearching = false;
-      });
-
-      if (results.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ Tìm thấy ${results.length} nghĩa cho "$query"'),
-            duration: const Duration(seconds: 2),
-            backgroundColor: Colors.green,
-          ),
-        );
+      if (mounted) {
+        setState(() {
+          _apiWords.clear();
+          _apiWords.addAll(results);
+          _filteredWords = _apiWords; // Hiển thị trực tiếp kết quả API
+          _isSearching = false;
+        });
       }
     } catch (e) {
-      setState(() {
-        _isSearching = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Lỗi: $e'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      if (mounted) {
+        setState(() {
+          _isSearching = false;
+          _apiWords.clear();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('⚠️ Lỗi kết nối: $e'), backgroundColor: Colors.orange),
+        );
+      }
     }
   }
 
   void _filterWords() {
-    List<VocabularyWord> source = _showApiResults ? _apiWords : _localWords;
-    List<VocabularyWord> filtered = source;
+    // Nếu đang xem kết quả Online thì không lọc bookmark/learned
+    if (_showApiResults) {
+      setState(() => _filteredWords = _apiWords);
+      return;
+    }
 
-    if (_searchQuery.isNotEmpty && !_showApiResults) {
+    // Logic lọc cho Local Words
+    List<VocabularyWord> filtered = _localWords;
+
+    // Lọc theo từ khóa (trong local)
+    if (_searchQuery.isNotEmpty) {
       filtered = filtered.where((word) {
         return word.word.toLowerCase().contains(_searchQuery) ||
-            word.meaning.toLowerCase().contains(_searchQuery) ||
-            word.example.toLowerCase().contains(_searchQuery);
+            (word.translatedMeaning?.toLowerCase().contains(_searchQuery) ?? false);
       }).toList();
     }
 
+    // Lọc theo Tab (All/Saved/Learned)
     switch (_selectedFilter) {
       case 1:
         filtered = filtered.where((word) => word.isBookmarked).toList();
@@ -184,45 +181,34 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
     });
   }
 
+  // --- LOGIC TƯƠNG TÁC ---
   void _toggleBookmark(String wordId) {
     setState(() {
-      if (_showApiResults) {
-        final index = _apiWords.indexWhere((word) => word.id == wordId);
-        if (index != -1) {
-          _apiWords[index] = _apiWords[index].copyWith(
-            isBookmarked: !_apiWords[index].isBookmarked,
-          );
-        }
-      } else {
-        final index = _localWords.indexWhere((word) => word.id == wordId);
-        if (index != -1) {
-          _localWords[index] = _localWords[index].copyWith(
-            isBookmarked: !_localWords[index].isBookmarked,
-          );
-        }
+      final listToUpdate = _showApiResults ? _apiWords : _localWords;
+      final index = listToUpdate.indexWhere((word) => word.id == wordId);
+
+      if (index != -1) {
+        listToUpdate[index] = listToUpdate[index].copyWith(
+            isBookmarked: !listToUpdate[index].isBookmarked
+        );
+
+        // Nếu đang ở Local và ở tab Bookmark, cần refresh list
+        if (!_showApiResults) _filterWords();
       }
-      _filterWords();
     });
   }
 
   void _toggleLearned(String wordId) {
     setState(() {
-      if (_showApiResults) {
-        final index = _apiWords.indexWhere((word) => word.id == wordId);
-        if (index != -1) {
-          _apiWords[index] = _apiWords[index].copyWith(
-            isLearned: !_apiWords[index].isLearned,
-          );
-        }
-      } else {
-        final index = _localWords.indexWhere((word) => word.id == wordId);
-        if (index != -1) {
-          _localWords[index] = _localWords[index].copyWith(
-            isLearned: !_localWords[index].isLearned,
-          );
-        }
+      final listToUpdate = _showApiResults ? _apiWords : _localWords;
+      final index = listToUpdate.indexWhere((word) => word.id == wordId);
+
+      if (index != -1) {
+        listToUpdate[index] = listToUpdate[index].copyWith(
+            isLearned: !listToUpdate[index].isLearned
+        );
+        if (!_showApiResults) _filterWords();
       }
-      _filterWords();
     });
   }
 
@@ -230,9 +216,7 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      backgroundColor: Colors.transparent, // Để thấy bo góc
       builder: (context) => VocabularyDetailSheet(
         word: word,
         onToggleBookmark: () => _toggleBookmark(word.id),
@@ -244,27 +228,42 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
   void _showFilterBottomSheet() {
     showModalBottomSheet(
       context: context,
-      builder: (context) => Container(
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Bộ lọc',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            const Text('Tùy chỉnh hiển thị', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+
+            const Text('Bộ lọc từ vựng', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey)),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 10,
+              children: [
+                _buildFilterChip('Tất cả', 0),
+                _buildFilterChip('Đã lưu', 1),
+                _buildFilterChip('Đã học', 2),
+                _buildFilterChip('Chưa học', 3),
+              ],
             ),
-            const SizedBox(height: 20),
-            _buildFilterOption('Tất cả', 0),
-            _buildFilterOption('Đã đánh dấu', 1),
-            _buildFilterOption('Đã học', 2),
-            _buildFilterOption('Chưa học', 3),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Áp dụng'),
-              ),
+
+            const Divider(height: 30),
+
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text("Ưu tiên Tiếng Việt", style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: const Text("Hiển thị nghĩa dịch ở màn hình danh sách"),
+              value: _preferVietnamese,
+              activeColor: Colors.purple,
+              onChanged: (val) {
+                setState(() => _preferVietnamese = val);
+                Navigator.pop(context);
+              },
             ),
           ],
         ),
@@ -272,44 +271,50 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
     );
   }
 
-  Widget _buildFilterOption(String text, int value) {
-    return ListTile(
-      title: Text(text),
-      trailing: _selectedFilter == value
-          ? const Icon(Icons.check, color: Colors.purple)
-          : null,
-      onTap: () {
-        setState(() {
-          _selectedFilter = value;
-        });
+  Widget _buildFilterChip(String label, int value) {
+    final isSelected = _selectedFilter == value;
+    return ChoiceChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (selected) {
+        setState(() => _selectedFilter = value);
         Navigator.pop(context);
         _filterWords();
       },
+      selectedColor: Colors.purple.shade100,
+      labelStyle: TextStyle(
+          color: isSelected ? Colors.purple.shade900 : Colors.black87,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal
+      ),
     );
   }
 
-  void _showWordOfTheDay() async {
-    final words = ['hello', 'learn', 'english', 'practice', 'improve', 'study'];
+  void _searchRandomWord() {
+    final words = ['serendipity', 'ephemeral', 'eloquence', 'resilience', 'wanderlust', 'tranquility'];
     final randomWord = words[DateTime.now().millisecondsSinceEpoch % words.length];
-
     _searchController.text = randomWord;
-    await _searchFromApi(randomWord);
   }
 
   @override
   Widget build(BuildContext context) {
-    final bookmarkedCount = _localWords.where((word) => word.isBookmarked).length;
-    final learnedCount = _localWords.where((word) => word.isLearned).length;
-    final totalWords = _localWords.length;
-
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Colors.grey[50], // Màu nền nhẹ nhàng
       body: SafeArea(
         child: Column(
           children: [
+            // --- HEADER SECTION ---
             Container(
-              color: Colors.white,
-              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -318,117 +323,99 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
                     children: [
                       const Text(
                         'Từ vựng',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
+                        style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.black87),
                       ),
-                      Row(
-                        children: [
-                          if (_showApiResults)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.blue[50],
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.cloud, color: Colors.blue[700], size: 16),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Từ điển Online',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.blue[700],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          const SizedBox(width: 8),
-                          GestureDetector(
-                            onTap: () {
-                              showDialog(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text('Thống kê'),
-                                  content: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      _buildStatItem('Từ vựng local', '$totalWords từ', Icons.library_books),
-                                      const SizedBox(height: 10),
-                                      _buildStatItem('Đã học', '$learnedCount từ', Icons.check_circle),
-                                      const SizedBox(height: 10),
-                                      _buildStatItem('Đã đánh dấu', '$bookmarkedCount từ', Icons.bookmark),
-                                    ],
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      child: const Text('Đóng'),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.purple[50],
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(Icons.insights, color: Colors.purple),
+
+                      // Nút đổi ngôn ngữ nhanh
+                      InkWell(
+                        onTap: () {
+                          setState(() => _preferVietnamese = !_preferVietnamese);
+                          ScaffoldMessenger.of(context).clearSnackBars();
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text(_preferVietnamese ? "Đã chuyển sang Tiếng Việt" : "Đã chuyển sang Tiếng Anh"),
+                            duration: const Duration(seconds: 1),
+                            behavior: SnackBarBehavior.floating,
+                            backgroundColor: Colors.purple.shade800,
+                          ));
+                        },
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: _preferVietnamese ? Colors.purple.shade50 : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                                color: _preferVietnamese ? Colors.purple.shade200 : Colors.grey.shade300
                             ),
                           ),
-                        ],
+                          child: Row(
+                            children: [
+                              Image.asset(
+                                _preferVietnamese ? 'assets/flags/vn.png' : 'assets/flags/uk.png', // Nếu không có ảnh thì dùng Text bên dưới
+                                width: 20,
+                                height: 20,
+                                errorBuilder: (c,e,s) => Icon(Icons.language, size: 18, color: _preferVietnamese ? Colors.purple : Colors.grey),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                _preferVietnamese ? "VI" : "EN",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: _preferVietnamese ? Colors.purple.shade700 : Colors.grey.shade700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+
+                  const SizedBox(height: 4),
                   Text(
                     _showApiResults
-                        ? 'Kết quả từ điển cho "$_searchQuery"'
-                        : 'Học và ôn tập từ vựng mỗi ngày',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
+                        ? 'Kết quả Online cho "$_searchQuery"'
+                        : 'Kho từ vựng cá nhân (${_localWords.length} từ)',
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                   ),
                 ],
               ),
             ),
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+
+            // --- SEARCH BAR SECTION ---
+            Padding(
+              padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
+                        ],
                       ),
                       child: TextField(
                         controller: _searchController,
+                        style: const TextStyle(fontSize: 16),
                         decoration: InputDecoration(
-                          hintText: 'Tìm kiếm từ vựng (gõ ít nhất 2 ký tự)...',
+                          hintText: 'Nhập từ cần tra...',
+                          hintStyle: TextStyle(color: Colors.grey.shade400),
                           border: InputBorder.none,
                           prefixIcon: _isSearching
-                              ? const Padding(
-                            padding: EdgeInsets.all(12),
+                              ? Padding(
+                            padding: const EdgeInsets.all(12),
                             child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.purple.shade300)
                             ),
                           )
-                              : const Icon(Icons.search, color: Colors.grey),
+                              : Icon(Icons.search, color: Colors.purple.shade300),
                           suffixIcon: _searchQuery.isNotEmpty
                               ? IconButton(
-                            icon: const Icon(Icons.clear, color: Colors.grey),
+                            icon: const Icon(Icons.close, color: Colors.grey),
                             onPressed: () {
                               _searchController.clear();
                               _showLocalWords();
@@ -441,89 +428,132 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  GestureDetector(
+
+                  // Filter Button
+                  InkWell(
                     onTap: _showFilterBottomSheet,
+                    borderRadius: BorderRadius.circular(16),
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: Colors.purple,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(color: Colors.purple.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))
+                        ],
                       ),
-                      child: const Icon(Icons.filter_list, color: Colors.white),
+                      child: const Icon(Icons.tune_rounded, color: Colors.white),
                     ),
                   ),
                 ],
               ),
             ),
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildMiniStat('Tổng số', '$totalWords', Colors.blue),
-                  _buildMiniStat('Đã học', '$learnedCount', Colors.green),
-                  _buildMiniStat('Đánh dấu', '$bookmarkedCount', Colors.orange),
-                  _buildMiniStat('API', _apiWords.length.toString(), Colors.purple),
-                ],
-              ),
-            ),
+
+            // --- CONTENT LIST ---
             Expanded(
               child: _isSearching
+              // 1. Loading State
                   ? Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.purple),
-                    ),
-                    const SizedBox(height: 16),
+                    const CircularProgressIndicator(color: Colors.purple),
+                    const SizedBox(height: 20),
                     Text(
-                      'Đang tìm kiếm "$_searchQuery"...',
-                      style: TextStyle(color: Colors.grey[600]),
+                      'Đang tìm "$_searchQuery"...',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 16),
                     ),
                   ],
                 ),
               )
+              // 2. Empty State
                   : _filteredWords.isEmpty
                   ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.search_off,
-                      size: 80,
-                      color: Colors.grey[300],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      _showApiResults
-                          ? 'Không tìm thấy từ "$_searchQuery"'
-                          : 'Không tìm thấy từ vựng nào',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.grey[500],
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(30),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.shade50,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _showApiResults ? Icons.search_off_rounded : Icons.library_books_rounded,
+                          size: 60,
+                          color: Colors.purple.shade200,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    if (!_showApiResults && _searchQuery.isEmpty)
-                      ElevatedButton(
-                        onPressed: _showWordOfTheDay,
-                        child: const Text('Tìm từ ngẫu nhiên'),
+                      const SizedBox(height: 20),
+                      Text(
+                        _showApiResults
+                            ? 'Không tìm thấy từ này'
+                            : 'Bạn chưa có từ vựng nào',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[700]),
                       ),
-                  ],
+                      const SizedBox(height: 8),
+                      Text(
+                        _showApiResults
+                            ? 'Hãy thử kiểm tra lại chính tả xem sao'
+                            : 'Hãy bắt đầu tra cứu và lưu từ mới nhé!',
+                        style: TextStyle(color: Colors.grey[500]),
+                      ),
+                      if (!_showApiResults) ...[
+                        const SizedBox(height: 24),
+                        ElevatedButton.icon(
+                          onPressed: _searchRandomWord,
+                          icon: const Icon(Icons.auto_awesome),
+                          label: const Text('Gợi ý từ ngẫu nhiên'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.purple,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                          ),
+                        ),
+                      ]
+                    ],
+                  ),
                 ),
               )
+              // 3. List Data
                   : ListView.builder(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 itemCount: _filteredWords.length,
                 itemBuilder: (context, index) {
                   final word = _filteredWords[index];
-                  return VocabularyCard(
-                    word: word,
-                    onTap: () => _showWordDetail(word),
-                    onBookmarkToggle: () => _toggleBookmark(word.id),
-                    onLearnedToggle: () => _toggleLearned(word.id),
+
+                  // LOGIC HIỂN THỊ ĐA NGÔN NGỮ:
+                  // Kiểm tra xem có bản dịch tiếng Việt chưa
+                  final hasVietnamese = word.translatedMeaning != null && word.translatedMeaning!.isNotEmpty;
+
+                  // Quyết định hiển thị:
+                  // Nếu user thích Tiếng Việt + Có bản dịch -> Hiện Tiếng Việt
+                  // Ngược lại -> Hiện Tiếng Anh
+                  final displayMeaning = (_preferVietnamese && hasVietnamese)
+                      ? word.translatedMeaning!
+                      : word.meaning;
+
+                  // Tương tự với ví dụ
+                  final displayExample = (_preferVietnamese && word.exampleTranslation != null && word.exampleTranslation!.isNotEmpty)
+                      ? word.exampleTranslation!
+                      : word.example;
+
+                  // Tạo object hiển thị (Adapter pattern)
+                  final displayWord = word.copyWith(
+                    meaning: displayMeaning,
+                    example: displayExample,
+                  );
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: VocabularyCard(
+                      word: displayWord,
+                      onTap: () => _showWordDetail(word), // Truyền word gốc vào chi tiết
+                      onBookmarkToggle: () => _toggleBookmark(word.id),
+                      onLearnedToggle: () => _toggleLearned(word.id),
+                    ),
                   );
                 },
               ),
@@ -531,60 +561,16 @@ class _VocabularyScreenState extends State<VocabularyScreen> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showWordOfTheDay,
+
+      // Nút Floating Action Button chỉ hiện khi ở màn hình Local
+      floatingActionButton: !_showApiResults && _filteredWords.isNotEmpty
+          ? FloatingActionButton.extended(
+        onPressed: _searchRandomWord,
         backgroundColor: Colors.purple,
-        child: const Icon(Icons.auto_awesome, color: Colors.white),
-      ),
-    );
-  }
-
-  Widget _buildStatItem(String title, String value, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, color: Colors.purple, size: 20),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(title, style: const TextStyle(fontSize: 14)),
-        ),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMiniStat(String label, String value, Color color) {
-    return Column(
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-          ),
-        ),
-      ],
+        icon: const Icon(Icons.shuffle, color: Colors.white),
+        label: const Text("Khám phá", style: TextStyle(color: Colors.white)),
+      )
+          : null,
     );
   }
 }
