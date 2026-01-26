@@ -7,7 +7,7 @@ class AuthService {
   // - Nếu chạy trên máy thật: Dùng địa chỉ IP LAN (VD: 'http://192.168.1.5:8080/api/v1/auth')
   // - Nếu dùng Cloudflare/Domain thực tế: Dùng 'https://api.buivietquangvinh.xyz/api/v1/auth'
   //static const String baseUrl = "https://api.buivietquangvinh.xyz/api/v1/auth";
-  static const String baseUrl = "http://192.168.1.15:8080/api/v1/auth";
+  static const String baseUrl = "http://192.168.1.23:8080/api/v1/auth";
   // Header giả lập trình duyệt để tránh bị Cloudflare chặn
   static final Map<String, String> headers = {
     "Content-Type": "application/json",

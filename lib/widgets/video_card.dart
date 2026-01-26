@@ -27,14 +27,15 @@ class VideoCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        // ❌ BỎ MARGIN: Vì Grid (SliverGrid) bên ngoài đã lo phần khoảng cách rồi
+        // Nếu để margin ở đây, thẻ sẽ bị thu nhỏ lại rất xấu.
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12), // Bo góc nhỏ lại chút cho gọn
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
-              blurRadius: 10,
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 5,
               offset: const Offset(0, 2),
             ),
           ],
@@ -42,57 +43,51 @@ class VideoCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 1. PHẦN ẢNH THUMBNAIL (Chiếm phần lớn diện tích)
             Stack(
               children: [
                 ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                  child: Image.network(
-                    imageUrl,
-                    width: double.infinity,
-                    height: 200,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                Positioned(
-                  top: 12,
-                  left: 12,
-                  child: GestureDetector(
-                    onTap: onLikePressed,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.9),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.favorite, color: isLiked ? Colors.pink : Colors.grey, size: 16),
-                          const SizedBox(width: 4),
-                          Text(
-                            '$likes',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.grey[300],
+                          child: const Center(
+                            child: Icon(Icons.broken_image, color: Colors.grey, size: 30),
                           ),
-                        ],
-                      ),
+                        );
+                      },
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          color: Colors.grey[100],
+                        );
+                      },
                     ),
                   ),
                 ),
+                // Badge số lượng video (Thu nhỏ lại)
                 Positioned(
-                  bottom: 12,
-                  left: 12,
+                  bottom: 6,
+                  right: 6, // Đổi sang góc phải nhìn thoáng hơn
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(20),
+                      color: Colors.black.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(4),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.play_arrow, color: Colors.white, size: 16),
-                        const SizedBox(width: 4),
+                        const Icon(Icons.play_circle_fill, color: Colors.white, size: 10),
+                        const SizedBox(width: 3),
                         Text(
-                          '$videoCount video mẫu câu',
-                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                          '$videoCount', // Chỉ hiện số cho gọn
+                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -100,19 +95,80 @@ class VideoCard extends StatelessWidget {
                 ),
               ],
             ),
+
+            // 2. PHẦN NỘI DUNG (Tối ưu padding và font size)
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(10), // Giảm padding từ 16 xuống 10
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Tiêu đề
                   Text(
                     title,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 13, // 🔥 Giảm font size xuống 13-14
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
+
+                  // Phụ đề (Subtitle)
                   Text(
                     subtitle,
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                    style: TextStyle(
+                      fontSize: 11, // 🔥 Giảm font size phụ đề
+                      color: Colors.grey[600],
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // Footer: Chỉ giữ lại nút Tim (Bỏ nút Xem Video vì thừa)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Hiển thị dạng Text nhỏ thay vì nút to
+                      Text(
+                        "Học ngay",
+                        style: TextStyle(fontSize: 10, color: Colors.blue[700], fontWeight: FontWeight.w600),
+                      ),
+
+                      // Nút Tim nhỏ gọn
+                      InkWell(
+                        onTap: onLikePressed,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.pink.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                  isLiked ? Icons.favorite : Icons.favorite_border,
+                                  color: Colors.pink,
+                                  size: 12
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '$likes',
+                                style: const TextStyle(
+                                    color: Colors.pink,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 10
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

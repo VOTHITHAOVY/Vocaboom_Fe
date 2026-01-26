@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
+import '../models/video_lesson.dart';
 
 class VideoDetailScreen extends StatefulWidget {
+  final VideoLesson videoData;
   final int heartCount;
   final Function(int)? onHeartCountChanged;
 
   const VideoDetailScreen({
     Key? key,
-    required this.heartCount,
+    required this.videoData,
+    this.heartCount = 0,
     this.onHeartCountChanged,
   }) : super(key: key);
 
@@ -15,327 +20,253 @@ class VideoDetailScreen extends StatefulWidget {
 }
 
 class _VideoDetailScreenState extends State<VideoDetailScreen> {
-  bool _isPlaying = false;
-  bool _isBookmarked = false;
-  bool _isLiked = false;
-  int _likeCount = 3;
-  double _playbackPosition = 0.3;
+  late YoutubePlayerController _controller;
+  final ItemScrollController _itemScrollController = ItemScrollController();
+  final ItemPositionsListener _itemPositionsListener = ItemPositionsListener.create();
 
-  void _togglePlayback() {
-    setState(() {
-      _isPlaying = !_isPlaying;
-    });
+  int _currentIndex = -1; // Index của câu đang nói
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = YoutubePlayerController(
+      initialVideoId: widget.videoData.youtubeId,
+      flags: const YoutubePlayerFlags(
+        autoPlay: false, // Tắt tự chạy để tránh lỗi trên Web/Mobile Web
+        mute: false,
+        enableCaption: false,
+        isLive: false,
+        forceHD: false,
+      ),
+    )..addListener(_videoListener);
   }
 
-  void _toggleBookmark() {
-    setState(() {
-      _isBookmarked = !_isBookmarked;
-    });
-  }
+  // --- LOGIC ĐỒNG BỘ SUBTITLE ---
+  void _videoListener() {
+    if (_controller.value.isPlaying && widget.videoData.subtitles.isNotEmpty) {
+      final currentSeconds = _controller.value.position.inMilliseconds / 1000;
 
-  void _toggleLike() {
-    setState(() {
-      if (_isLiked) {
-        _likeCount--;
-        widget.onHeartCountChanged?.call(widget.heartCount + 1);
-      } else {
-        if (widget.heartCount > 0) {
-          _likeCount++;
-          _isLiked = true;
-          widget.onHeartCountChanged?.call(widget.heartCount - 1);
+      // Tìm câu active
+      int activeIndex = widget.videoData.subtitles.indexWhere((sub) =>
+      currentSeconds >= sub.startSeconds && currentSeconds < sub.endSeconds
+      );
+
+      // Nếu tìm thấy và khác index cũ
+      if (activeIndex != -1 && activeIndex != _currentIndex) {
+        setState(() {
+          _currentIndex = activeIndex;
+        });
+        // Tự động cuộn danh sách đến câu đang nói
+        if (_itemScrollController.isAttached) {
+          _itemScrollController.scrollTo(
+            index: activeIndex,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            alignment: 0.4, // Căn ở khoảng giữa màn hình danh sách
+          );
         }
       }
-      _isLiked = !_isLiked;
-    });
+    }
   }
 
-  void _seekForward() {
-    setState(() {
-      _playbackPosition = (_playbackPosition + 0.1).clamp(0.0, 1.0);
-    });
-  }
-
-  void _seekBackward() {
-    setState(() {
-      _playbackPosition = (_playbackPosition - 0.1).clamp(0.0, 1.0);
-    });
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Mobile Layout: Dùng Column để chia bố cục dọc
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
+      backgroundColor: Colors.white, // Nền trắng sạch sẽ
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0, // Bỏ bóng để nhìn phẳng, hiện đại
+        leading: const BackButton(color: Colors.black),
+        title: Text(
+          widget.videoData.title,
+          style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.w600),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        centerTitle: true,
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.pink[50],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(children: [
+              const Icon(Icons.favorite, color: Colors.pink, size: 16),
+              const SizedBox(width: 4),
+              Text('${widget.heartCount}', style: const TextStyle(color: Colors.pink, fontWeight: FontWeight.bold, fontSize: 12)),
+            ]),
+          )
+        ],
+      ),
+      body: Column(
+        children: [
+          // 1. VIDEO PLAYER (Cố định ở trên)
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: YoutubePlayer(
+              controller: _controller,
+              showVideoProgressIndicator: true,
+              progressColors: const ProgressBarColors(
+                playedColor: Colors.pink,
+                handleColor: Colors.pinkAccent,
+              ),
+              // Khi video kết thúc
+              onEnded: (metaData) {
+                _controller.seekTo(Duration.zero);
+                _controller.pause();
+                setState(() => _currentIndex = -1);
+              },
+            ),
+          ),
+
+          // 2. CÂU ĐANG NÓI (ACTIVE SENTENCE) - Cố định ngay dưới video
+          // Giúp người dùng luôn nhìn thấy câu hiện tại mà không cần tìm
+          _buildActiveSentenceBox(),
+
+          // Đường kẻ phân cách
+          const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
+
+          // 3. DANH SÁCH CUỘN (SCROLLABLE LIST) - Chiếm phần còn lại
+          Expanded(
+            child: _buildScrollableList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- WIDGET HIỂN THỊ CÂU ĐANG NÓI (NỔI BẬT) ---
+  Widget _buildActiveSentenceBox() {
+    // Trạng thái chưa chạy video
+    if (_currentIndex == -1 || widget.videoData.subtitles.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+        color: Colors.white,
         child: Column(
           children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  Center(
-                    child: Image.network(
-                      'https://picsum.photos/800/600?random=20',
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.black.withOpacity(0.7),
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.arrow_back, color: Colors.white),
-                            onPressed: () => Navigator.pop(context),
-                          ),
-                          const Spacer(),
-                          IconButton(
-                            icon: Icon(_isBookmarked ? Icons.bookmark : Icons.bookmark_border, color: Colors.white),
-                            onPressed: _toggleBookmark,
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.share, color: Colors.white),
-                            onPressed: () {
-                              showDialog(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text('Chia sẻ video'),
-                                  content: const Text('Chia sẻ video này với bạn bè!'),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      child: const Text('OK'),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Center(
-                    child: GestureDetector(
-                      onTap: _togglePlayback,
-                      child: Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.3),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(_isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 50),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 80,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.8),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Text(
-                              'I\'m still sticking to it.',
-                              style: TextStyle(color: Colors.white, fontSize: 18),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'Tôi vẫn giữ nguyên lập trường đó.',
-                            style: TextStyle(color: Colors.white70, fontSize: 16),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 60,
-                    left: 20,
-                    right: 20,
-                    child: GestureDetector(
-                      onTapDown: (details) {
-                        final width = MediaQuery.of(context).size.width - 40;
-                        final tapPosition = details.localPosition.dx;
-                        setState(() {
-                          _playbackPosition = (tapPosition / width).clamp(0.0, 1.0);
-                        });
-                      },
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: _playbackPosition,
-                          backgroundColor: Colors.white.withOpacity(0.3),
-                          valueColor: const AlwaysStoppedAnimation<Color>(Colors.purple),
-                          minHeight: 4,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 20,
-                    left: 20,
-                    right: 20,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '${(_playbackPosition * 45).floor()}:00',
-                          style: const TextStyle(color: Colors.white, fontSize: 14),
-                        ),
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.replay_10, color: Colors.white),
-                              onPressed: _seekBackward,
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.forward_10, color: Colors.white),
-                              onPressed: _seekForward,
-                            ),
-                          ],
-                        ),
-                        const Text(
-                          '0:45',
-                          style: TextStyle(color: Colors.white, fontSize: 14),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text(
-                              'stick to',
-                              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.purple),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              'giữ nguyên, kiên trì',
-                              style: TextStyle(fontSize: 16, color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.volume_up, color: Colors.purple),
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Phát âm'),
-                              content: const Text('Phát âm từ "stick to"...'),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('OK'),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                      IconButton(
-                        icon: Icon(_isLiked ? Icons.favorite : Icons.favorite_border, color: _isLiked ? Colors.pink : Colors.grey),
-                        onPressed: _toggleLike,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Các video liên quan',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 100,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: 5,
-                      itemBuilder: (context, index) {
-                        return GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => VideoDetailScreen(
-                                  heartCount: widget.heartCount,
-                                  onHeartCountChanged: widget.onHeartCountChanged,
-                                ),
-                              ),
-                            );
-                          },
-                          child: Container(
-                            width: 140,
-                            margin: const EdgeInsets.only(right: 12),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              image: DecorationImage(
-                                image: NetworkImage('https://picsum.photos/200/150?random=${index + 30}'),
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(12),
-                                gradient: LinearGradient(
-                                  begin: Alignment.topCenter,
-                                  end: Alignment.bottomCenter,
-                                  colors: [
-                                    Colors.transparent,
-                                    Colors.black.withOpacity(0.7),
-                                  ],
-                                ),
-                              ),
-                              child: const Align(
-                                alignment: Alignment.center,
-                                child: Icon(Icons.play_circle_outline, color: Colors.white, size: 40),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
+            Icon(Icons.touch_app, color: Colors.pink[100], size: 30),
+            const SizedBox(height: 8),
+            const Text(
+              "Bấm Play hoặc chọn một câu để bắt đầu",
+              style: TextStyle(color: Colors.grey, fontSize: 13),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
+      );
+    }
+
+    // Hiển thị câu đang nói
+    final sub = widget.videoData.subtitles[_currentIndex];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.pink[50], // Nền hồng nhạt làm nổi bật
+        border: Border(
+          bottom: BorderSide(color: Colors.pink[100]!, width: 1),
+        ),
       ),
+      child: Column(
+        children: [
+          Text(
+            sub.textEn,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 18, // Chữ to rõ
+              fontWeight: FontWeight.bold,
+              color: Colors.pink,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            sub.textVi,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, color: Colors.grey[700], height: 1.2),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- WIDGET DANH SÁCH (NHỎ GỌN) ---
+  Widget _buildScrollableList() {
+    if (widget.videoData.subtitles.isEmpty) {
+      return const Center(child: Text("Không có dữ liệu phụ đề"));
+    }
+
+    return ScrollablePositionedList.builder(
+      itemScrollController: _itemScrollController,
+      itemPositionsListener: _itemPositionsListener,
+      padding: const EdgeInsets.only(bottom: 50), // Chừa chỗ trống dưới cùng
+      itemCount: widget.videoData.subtitles.length,
+      itemBuilder: (context, index) {
+        final sub = widget.videoData.subtitles[index];
+        final isActive = index == _currentIndex;
+
+        return InkWell(
+          onTap: () {
+            // Tua video và tự chạy
+            _controller.seekTo(Duration(milliseconds: (sub.startSeconds * 1000).toInt()));
+            if (!_controller.value.isPlaying) _controller.play();
+          },
+          child: Container(
+            color: isActive ? Colors.pink.withOpacity(0.05) : Colors.transparent,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Icon trạng thái
+                Container(
+                  margin: const EdgeInsets.only(top: 2),
+                  child: Icon(
+                    isActive ? Icons.bar_chart : Icons.play_arrow_rounded,
+                    color: isActive ? Colors.pink : Colors.grey[300],
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // Nội dung text
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        sub.textEn,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                          color: isActive ? Colors.black87 : Colors.black54,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        sub.textVi,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isActive ? Colors.grey[700] : Colors.grey[400],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

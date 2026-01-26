@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'video_detail_screen.dart';
 import 'notifications_screen.dart';
-
+import '../models/video_lesson.dart'; // Import model
 class ReviewScreen extends StatelessWidget {
   final int heartCount;
 
@@ -168,6 +168,15 @@ class ReviewScreen extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (context) => VideoDetailScreen(
+
+                          videoData: VideoLesson(
+                              id: 0,
+                              title: 'Video ôn tập #${index + 1}',
+                              youtubeId: 'g-S6nyX8_6k', // ID video mẫu
+                              thumbnailUrl: '',
+                              subtitles: [] // Danh sách sub rỗng
+                          ),
+
                           heartCount: heartCount,
                           onHeartCountChanged: null,
                         ),
