@@ -32,7 +32,7 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
     _controller = YoutubePlayerController(
       initialVideoId: widget.videoData.youtubeId,
       flags: const YoutubePlayerFlags(
-        autoPlay: false, // Tắt tự chạy để tránh lỗi trên Web/Mobile Web
+        autoPlay: false,
         mute: false,
         enableCaption: false,
         isLive: false,
@@ -48,8 +48,7 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
 
       // Tìm câu active
       int activeIndex = widget.videoData.subtitles.indexWhere((sub) =>
-      currentSeconds >= sub.startSeconds && currentSeconds < sub.endSeconds
-      );
+      currentSeconds >= sub.startSeconds && currentSeconds < sub.endSeconds);
 
       // Nếu tìm thấy và khác index cũ
       if (activeIndex != -1 && activeIndex != _currentIndex) {
@@ -77,76 +76,90 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Mobile Layout: Dùng Column để chia bố cục dọc
-    return Scaffold(
-      backgroundColor: Colors.white, // Nền trắng sạch sẽ
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0, // Bỏ bóng để nhìn phẳng, hiện đại
-        leading: const BackButton(color: Colors.black),
-        title: Text(
-          widget.videoData.title,
-          style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.w600),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+    // ✅ FIX LỖI FULLSCREEN: Dùng YoutubePlayerBuilder
+    return YoutubePlayerBuilder(
+      // 1. Cấu hình Player nằm ở đây
+      player: YoutubePlayer(
+        controller: _controller,
+        showVideoProgressIndicator: true,
+        progressColors: const ProgressBarColors(
+          playedColor: Colors.pink,
+          handleColor: Colors.pinkAccent,
         ),
-        centerTitle: true,
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.pink[50],
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(children: [
-              const Icon(Icons.favorite, color: Colors.pink, size: 16),
-              const SizedBox(width: 4),
-              Text('${widget.heartCount}', style: const TextStyle(color: Colors.pink, fontWeight: FontWeight.bold, fontSize: 12)),
-            ]),
-          )
-        ],
+        onEnded: (metaData) {
+          _controller.seekTo(Duration.zero);
+          _controller.pause();
+          setState(() => _currentIndex = -1);
+        },
       ),
-      body: Column(
-        children: [
-          // 1. VIDEO PLAYER (Cố định ở trên)
-          AspectRatio(
-            aspectRatio: 16 / 9,
-            child: YoutubePlayer(
-              controller: _controller,
-              showVideoProgressIndicator: true,
-              progressColors: const ProgressBarColors(
-                playedColor: Colors.pink,
-                handleColor: Colors.pinkAccent,
+      // 2. Giao diện chính của App nằm trong builder
+      // `player` ở đây chính là cái YoutubePlayer được pass xuống
+      builder: (context, player) {
+        return Scaffold(
+          backgroundColor: Colors.white,
+          appBar: AppBar(
+            backgroundColor: Colors.white,
+            elevation: 0,
+            leading: const BackButton(color: Colors.black),
+            title: Text(
+              widget.videoData.title,
+              style: const TextStyle(
+                color: Colors.black,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
               ),
-              // Khi video kết thúc
-              onEnded: (metaData) {
-                _controller.seekTo(Duration.zero);
-                _controller.pause();
-                setState(() => _currentIndex = -1);
-              },
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
+            centerTitle: true,
+            actions: [
+              Container(
+                margin: const EdgeInsets.only(right: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.pink[50],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.favorite, color: Colors.pink, size: 16),
+                  const SizedBox(width: 4),
+                  Text('${widget.heartCount}',
+                      style: const TextStyle(
+                          color: Colors.pink,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12)),
+                ]),
+              )
+            ],
           ),
+          body: Column(
+            children: [
+              // 1. VIDEO PLAYER (Dùng biến player từ builder)
+              // AspectRatio giúp giữ tỷ lệ khung hình khi ở màn hình dọc
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: player,
+              ),
 
-          // 2. CÂU ĐANG NÓI (ACTIVE SENTENCE) - Cố định ngay dưới video
-          // Giúp người dùng luôn nhìn thấy câu hiện tại mà không cần tìm
-          _buildActiveSentenceBox(),
+              // 2. CÂU ĐANG NÓI (ACTIVE SENTENCE)
+              _buildActiveSentenceBox(),
 
-          // Đường kẻ phân cách
-          const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
+              const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
 
-          // 3. DANH SÁCH CUỘN (SCROLLABLE LIST) - Chiếm phần còn lại
-          Expanded(
-            child: _buildScrollableList(),
+              // 3. DANH SÁCH CUỘN
+              Expanded(
+                child: _buildScrollableList(),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  // --- WIDGET HIỂN THỊ CÂU ĐANG NÓI (NỔI BẬT) ---
+  // --- CÁC WIDGET CON GIỮ NGUYÊN NHƯ CŨ ---
+
   Widget _buildActiveSentenceBox() {
-    // Trạng thái chưa chạy video
     if (_currentIndex == -1 || widget.videoData.subtitles.isEmpty) {
       return Container(
         width: double.infinity,
@@ -166,13 +179,12 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
       );
     }
 
-    // Hiển thị câu đang nói
     final sub = widget.videoData.subtitles[_currentIndex];
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.pink[50], // Nền hồng nhạt làm nổi bật
+        color: Colors.pink[50],
         border: Border(
           bottom: BorderSide(color: Colors.pink[100]!, width: 1),
         ),
@@ -183,7 +195,7 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
             sub.textEn,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 18, // Chữ to rõ
+              fontSize: 18,
               fontWeight: FontWeight.bold,
               color: Colors.pink,
               height: 1.3,
@@ -193,14 +205,14 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
           Text(
             sub.textVi,
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, color: Colors.grey[700], height: 1.2),
+            style: TextStyle(
+                fontSize: 14, color: Colors.grey[700], height: 1.2),
           ),
         ],
       ),
     );
   }
 
-  // --- WIDGET DANH SÁCH (NHỎ GỌN) ---
   Widget _buildScrollableList() {
     if (widget.videoData.subtitles.isEmpty) {
       return const Center(child: Text("Không có dữ liệu phụ đề"));
@@ -209,7 +221,7 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
     return ScrollablePositionedList.builder(
       itemScrollController: _itemScrollController,
       itemPositionsListener: _itemPositionsListener,
-      padding: const EdgeInsets.only(bottom: 50), // Chừa chỗ trống dưới cùng
+      padding: const EdgeInsets.only(bottom: 50),
       itemCount: widget.videoData.subtitles.length,
       itemBuilder: (context, index) {
         final sub = widget.videoData.subtitles[index];
@@ -217,8 +229,8 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
 
         return InkWell(
           onTap: () {
-            // Tua video và tự chạy
-            _controller.seekTo(Duration(milliseconds: (sub.startSeconds * 1000).toInt()));
+            _controller.seekTo(
+                Duration(milliseconds: (sub.startSeconds * 1000).toInt()));
             if (!_controller.value.isPlaying) _controller.play();
           },
           child: Container(
@@ -227,7 +239,6 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Icon trạng thái
                 Container(
                   margin: const EdgeInsets.only(top: 2),
                   child: Icon(
@@ -237,8 +248,6 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
                   ),
                 ),
                 const SizedBox(width: 12),
-
-                // Nội dung text
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -247,7 +256,8 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
                         sub.textEn,
                         style: TextStyle(
                           fontSize: 15,
-                          fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                          fontWeight:
+                          isActive ? FontWeight.w600 : FontWeight.w400,
                           color: isActive ? Colors.black87 : Colors.black54,
                         ),
                       ),
@@ -256,7 +266,8 @@ class _VideoDetailScreenState extends State<VideoDetailScreen> {
                         sub.textVi,
                         style: TextStyle(
                           fontSize: 13,
-                          color: isActive ? Colors.grey[700] : Colors.grey[400],
+                          color:
+                          isActive ? Colors.grey[700] : Colors.grey[400],
                         ),
                       ),
                     ],

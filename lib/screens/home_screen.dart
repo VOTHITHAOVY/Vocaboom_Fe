@@ -2,18 +2,16 @@ import 'package:flutter/material.dart';
 import 'dart:math';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:io' show Platform;
 
-// Import các màn hình và model liên quan
+// ✅ Sửa lại Import cho đúng tên file bạn đang có
 import 'quiz/quiz_today_screen.dart';
 import 'video_detail_screen.dart';
-import 'profile_screen.dart';
 import 'notifications_screen.dart';
-import 'LoginScreen.dart';
 import '../widgets/video_card.dart';
 import '../models/video_lesson.dart';
 
+import 'LoginScreen.dart';   // ✅ Tên file viết Hoa như bạn muốn
+import 'profile_screen.dart'; // File profile
 class HomeScreen extends StatefulWidget {
   final int heartCount;
   final int coinCount;
@@ -38,8 +36,11 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedCategoryIndex = 0;
   final List<String> _categories = ['Tất cả', 'Đăng ký', 'Du lịch', 'Hoạt hình', 'Phim ảnh', 'Âm nhạc'];
   bool _showNotice = true;
+
+  // Giả lập trạng thái like cho phần Snacks
   final List<bool> _snackLikes = List.generate(5, (index) => false);
   final List<int> _snackLikeCounts = List.generate(5, (index) => Random().nextInt(10) + 1);
+
   late Future<List<VideoLesson>> _futureVideos;
 
   @override
@@ -48,28 +49,26 @@ class _HomeScreenState extends State<HomeScreen> {
     _futureVideos = fetchVideos();
   }
 
-  // --- 🔥 HÀM GỌI API (ĐÃ SỬA ĐỂ CHẠY ỔN ĐỊNH NHẤT) ---
+  // --- 🔥 HÀM GỌI API (ĐÃ TỐI ƯU) ---
   Future<List<VideoLesson>> fetchVideos() async {
-    // 👇 BƯỚC QUAN TRỌNG NHẤT:
-    // Mở CMD trên máy tính, gõ 'ipconfig', lấy dòng IPv4 Address và điền vào đây.
-    // Ví dụ: "192.168.1.5", "192.168.0.101"...
-    const String myIp = "192.168.1.23";
-
-    String baseUrl;
-    if (kIsWeb) {
-      baseUrl = "http://localhost:8080/api/v1/videos";
-    } else {
-      // Ép dùng IP LAN cho tất cả thiết bị (Máy ảo hay Máy thật đều chạy được)
-      baseUrl = "http://$myIp:8080/api/v1/videos";
-    }
-
+    const String baseUrl = "https://api.buivietquangvinh.xyz/api/v1/videos";
     print("🚀 Đang gọi API tới: $baseUrl");
 
     try {
-      final response = await http.get(Uri.parse(baseUrl));
+      final response = await http.get(
+        Uri.parse(baseUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': '*/*',
+        },
+      );
+
+      print("📩 Server trả về Code: ${response.statusCode}");
 
       if (response.statusCode == 200) {
         List<dynamic> body = jsonDecode(utf8.decode(response.bodyBytes));
+        print("✅ Đã tải thành công ${body.length} video!");
         return body.map((dynamic item) => VideoLesson.fromJson(item)).toList();
       } else {
         print("❌ Lỗi API Code: ${response.statusCode}");
@@ -77,15 +76,11 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       print("❌ LỖI KẾT NỐI: $e");
-      // Mẹo debug cho bạn
-      if (e.toString().contains("Connection timed out")) {
-        print("👉 Gợi ý: Kiểm tra lại IP $myIp xem đúng chưa? Hoặc tắt Firewall máy tính.");
-      }
       return [];
     }
   }
 
-  // --- LOGIC ĐĂNG NHẬP ---
+  // --- LOGIC YÊU CẦU ĐĂNG NHẬP ---
   void _requireLogin(VoidCallback onSuccess) {
     if (widget.userData != null && widget.userData!.isNotEmpty) {
       onSuccess();
@@ -111,6 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0277BD)),
               onPressed: () {
                 Navigator.pop(context);
+                // ✅ Sửa tên Class: LoginScreen (Viết hoa chữ đầu)
                 Navigator.push(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
               },
               child: const Text('Đăng nhập ngay', style: TextStyle(color: Colors.white)),
@@ -121,7 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // --- LOGIC THẢ TIM ---
+  // --- LOGIC TRỪ TIM ---
   void _handleHeartDeduction(VoidCallback onSuccess) {
     if (widget.heartCount > 0) {
       widget.onHeartCountChanged?.call(widget.heartCount - 1);
@@ -181,7 +177,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     Future.delayed(const Duration(milliseconds: 1000), () {
-      if (Navigator.canPop(context)) Navigator.pop(context);
+      if (mounted && Navigator.canPop(context)) Navigator.pop(context);
     });
   }
 
@@ -201,7 +197,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
-    // Tự động chỉnh cột: 4 cột cho Web/Tablet, 2 cột cho Mobile
     final int crossAxisCount = screenWidth > 600 ? 4 : 2;
 
     return Scaffold(
@@ -217,25 +212,51 @@ class _HomeScreenState extends State<HomeScreen> {
             SliverToBoxAdapter(child: _buildNoticeBanner()),
             SliverToBoxAdapter(child: _buildQuizCard()),
 
+            // Tiêu đề
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text('Dành cho ${widget.userData?['name'] ?? 'bạn'}',
+                child: Text(
+                    'Dành cho ${widget.userData?['fullName'] ?? widget.userData?['name'] ?? 'bạn'}',
                     style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               ),
             ),
 
+            // Lưới Video
             FutureBuilder<List<VideoLesson>>(
               future: _futureVideos,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const SliverToBoxAdapter(
-                    child: Padding(padding: EdgeInsets.all(50.0), child: Center(child: CircularProgressIndicator())),
+                    child: Padding(
+                        padding: EdgeInsets.all(50.0),
+                        child: Center(child: CircularProgressIndicator())
+                    ),
                   );
                 } else if (snapshot.hasError) {
-                  return SliverToBoxAdapter(child: Center(child: Text("Lỗi tải video: ${snapshot.error}")));
+                  return SliverToBoxAdapter(child: Center(child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      children: [
+                        const Icon(Icons.wifi_off, size: 50, color: Colors.grey),
+                        const SizedBox(height: 10),
+                        const Text("Không thể tải video.\nVui lòng kiểm tra mạng.", textAlign: TextAlign.center),
+                        ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              _futureVideos = fetchVideos();
+                            });
+                          },
+                          child: const Text("Thử lại"),
+                        )
+                      ],
+                    ),
+                  )));
                 } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const SliverToBoxAdapter(child: Center(child: Text("Chưa có video nào.")));
+                  return const SliverToBoxAdapter(child: Center(child: Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: Text("Chưa có video nào."),
+                  )));
                 }
 
                 final videos = snapshot.data!;
@@ -245,17 +266,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   sliver: SliverGrid(
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: crossAxisCount,
-                      childAspectRatio: 0.75, // Tỉ lệ khung hình
+                      childAspectRatio: 0.75,
                       crossAxisSpacing: 10,
                       mainAxisSpacing: 12,
                     ),
                     delegate: SliverChildBuilderDelegate(
                           (context, index) {
                         final video = videos[index];
-
-                        // Fix ảnh lỗi bằng cách dùng hqdefault
-                        String thumb = "https://img.youtube.com/vi/${video.youtubeId}/hqdefault.jpg";
-                        String subPreview = "Có phụ đề";
+                        String thumb = video.thumbnailUrl != null && video.thumbnailUrl!.isNotEmpty
+                            ? video.thumbnailUrl!
+                            : "https://img.youtube.com/vi/${video.youtubeId}/hqdefault.jpg";
 
                         return VideoCard(
                           imageUrl: thumb,
@@ -263,7 +283,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           isLiked: false,
                           videoCount: 1,
                           title: video.title,
-                          subtitle: subPreview,
+                          subtitle: "Có phụ đề",
                           onTap: () {
                             Navigator.push(
                               context,
@@ -299,7 +319,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- WIDGET CON (Giữ nguyên) ---
+  // --- CÁC WIDGET CON ---
   Widget _buildHeader() {
     return Container(
       color: Colors.white,
@@ -346,6 +366,7 @@ class _HomeScreenState extends State<HomeScreen> {
               GestureDetector(
                 onTap: () {
                   Navigator.push(context, MaterialPageRoute(
+                    // ✅ Sửa lỗi chính ở đây: profile_screen -> ProfileScreen (Viết hoa chữ cái đầu)
                     builder: (_) => ProfileScreen(
                       heartCount: widget.heartCount, coinCount: widget.coinCount, userData: widget.userData,
                       onHeartCountChanged: widget.onHeartCountChanged, onCoinCountChanged: widget.onCoinCountChanged,
@@ -365,6 +386,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ... Các widget còn lại giữ nguyên ...
   Widget _buildCategoryBar() {
     return Container(
       color: Colors.white, height: 50,
